@@ -1,0 +1,38 @@
+/* Improved custom cursor styling */
+
+/* Hide default cursor on body when our custom cursor is active */
+body.custom-cursor-active {
+    cursor: none !important;
+}
+
+/* The custom cursor element */
+#custom-gada-cursor {
+    position: fixed;
+    width: 40px;
+    height: 40px;
+    background-image: url('assets/pointer-gada.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center center;
+    z-index: 10000;
+    pointer-events: none;
+    transform: translate(-16px, -16px); /* Center the cursor */
+    will-change: transform; /* Optimization for animations */
+    transition: transform 0.05s ease;
+}
+
+/* Click effect */
+#custom-gada-cursor.clicking {
+    transform: translate(-20px, -20px) scale(0.9);
+}
+
+/* Hide all default cursors on important elements */
+.game-button,
+.hud-controls button,
+.instructions-button,
+.close-button,
+.mobile-button,
+.github-link a,
+#game-canvas {
+    cursor: none !important;
+}

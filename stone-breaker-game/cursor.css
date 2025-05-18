@@ -1,0 +1,42 @@
+/* Custom cursor implementation with JavaScript support */
+
+/* Hide default cursor when our custom cursor is active */
+body.custom-cursor-active {
+    cursor: none !important;
+}
+
+/* The custom cursor overlay element */
+.custom-cursor {
+    position: fixed;
+    width: 32px;
+    height: 32px;
+    background-image: url('assets/pointer-gada.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center center;
+    pointer-events: none; /* So it doesn't interfere with clicks */
+    z-index: 9999;
+    transform: translate(-15px, -15px); /* Center the cursor on the pointer spot */
+    transition: transform 0.05s ease; /* Slight smoothing */
+}
+
+/* When mouse is clicked */
+.custom-cursor.active {
+    transform: translate(-17px, -17px) scale(0.9); /* Slightly smaller on click */
+}
+
+/* Fallback CSS cursor methods (used until JS loads) */
+.gada-cursor {
+    cursor: pointer;
+}
+
+/* Specific clickable elements */
+#game-canvas,
+.hud-controls button,
+.game-button,
+.instructions-button,
+.close-button,
+.mobile-button,
+.github-link a {
+    cursor: pointer;
+}

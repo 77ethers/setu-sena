@@ -6,15 +6,19 @@
     <title>Ram Setu Bridge Builder</title>
     <link rel="stylesheet" href="ramayana-style.css">
     <link rel="stylesheet" href="upgrade-styles.css">
+    <link rel="stylesheet" href="cursor-solution.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
-<body>
+<body class="gada-cursor">
     <!-- Main Game Canvas (Full Screen) -->
     <div id="game-canvas"></div>
     
     <!-- HUD Bar (Fixed at top) -->
     <div class="hud-bar">
         <div class="hud-section">
+            <div class="logo-container">
+                <img src="assets/setu-builder-logo.png" alt="Ram Setu Logo" id="game-logo-small">
+            </div>
             <div class="score-container">
                 <span>Score: </span>
                 <span id="score">0</span>
@@ -51,6 +55,9 @@
         <!-- Overlay Screens -->
         <div id="start-screen" class="overlay">
             <div class="overlay-content">
+                <div class="logo-container-large">
+                    <img src="assets/setu-builder-logo.png" alt="Ram Setu Logo" id="game-logo-large">
+                </div>
                 <h1>Ram Setu Bridge Builder</h1>
                 <p>Connect the shores by building a bridge with broken stones!</p>
                 
@@ -80,14 +87,25 @@
         
         <div id="pause-screen" class="overlay hidden">
             <div class="overlay-content">
+                <div class="logo-container-medium">
+                    <img src="assets/setu-builder-logo.png" alt="Ram Setu Logo" id="game-logo-medium">
+                </div>
                 <h2>Game Paused</h2>
                 <button type="button" id="resume-button" class="game-button">Resume</button>
                 <button type="button" id="restart-button" class="game-button">Restart</button>
+                <div class="github-link">
+                    <a href="https://github.com/77ethers/setu-sena" target="_blank">
+                        <i class="fab fa-github"></i> GitHub Repository
+                    </a>
+                </div>
             </div>
         </div>
         
         <div id="victory-screen" class="overlay hidden">
             <div class="overlay-content">
+                <div class="logo-container-medium">
+                    <img src="assets/setu-builder-logo.png" alt="Ram Setu Logo" id="game-logo-medium">
+                </div>
                 <h2>Bridge Complete!</h2>
                 <p>Ram Setu has been built successfully!</p>
                 <div class="final-score">Final Score: <span id="final-score">0</span></div>
@@ -123,6 +141,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
     <script src="assets/ornaments.js"></script>
     <script src="audio.js"></script>
+    <script src="cursor-solution.js"></script>
     <script src="ui.js"></script>
     <script src="upgrades.js"></script>
     <script src="boulders-simple.js"></script>
