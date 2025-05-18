@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+    background: linear-gradient(180deg, #0070b8, #003a70);
     height: 100vh;
     overflow: hidden;
     display: flex;
@@ -18,6 +18,7 @@ body {
     width: 100vw;
     height: 100vh;
     position: relative;
+    overflow: hidden;
 }
 
 .score-container {
@@ -30,13 +31,66 @@ body {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+.bridge-progress {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 24px;
+    color: white;
+    z-index: 10;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.instructions {
+    position: absolute;
+    top: 60px;
+    left: 20px;
+    color: white;
+    font-size: 16px;
+    z-index: 10;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    max-width: 400px;
+}
+
+.water-area {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 25%;
+    background: linear-gradient(to bottom, #0080ff, #005bb5);
+    z-index: 1;
+    opacity: 0.7;
+}
+
+.shore {
+    position: absolute;
+    bottom: 0;
+    height: 30%;
+    width: 8%;
+    background: #d2b48c;
+    z-index: 2;
+}
+
+.left-shore {
+    left: 0;
+    border-top-right-radius: 20px;
+}
+
+.right-shore {
+    right: 0;
+    border-top-left-radius: 20px;
+}
+
 #game-canvas {
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 10px;
+    background-color: transparent;
     overflow: hidden;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+    position: relative;
 }
 
 canvas {

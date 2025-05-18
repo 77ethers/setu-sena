@@ -3,19 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stone Breaker</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Ram Setu Bridge Builder</title>
+    <link rel="stylesheet" href="enhanced-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
-    <div class="game-container">
-        <div class="score-container">
-            <span>Score: </span>
-            <span id="score">0</span>
+    <!-- Main Game Canvas (Full Screen) -->
+    <div id="game-canvas"></div>
+    
+    <!-- HUD Bar (Fixed at top) -->
+    <div class="hud-bar">
+        <div class="hud-section">
+            <div class="score-container">
+                <span>Score: </span>
+                <span id="score">0</span>
+            </div>
         </div>
-        <div id="game-canvas"></div>
+        
+        <div class="hud-section">
+            <div class="bridge-progress">
+                <span>Bridge: </span>
+                <span id="bridge-completion">0%</span>
+            </div>
+        </div>
+        
+        <div class="hud-controls">
+            <!-- Audio Controls -->
+            <button type="button" id="mute-toggle" aria-label="Toggle Sound">
+                <i class="fas fa-volume-up"></i>
+            </button>
+            
+            <!-- Pause Button -->
+            <button type="button" id="pause-game" aria-label="Pause Game">
+                <i class="fas fa-pause"></i>
+            </button>
+        </div>
     </div>
     
+    <!-- Water Area (Will be drawn in canvas) -->
+        
+        <!-- Overlay Screens -->
+        <div id="start-screen" class="overlay">
+            <div class="overlay-content">
+                <h1>Ram Setu Bridge Builder</h1>
+                <p>Connect the shores by building a bridge with broken stones!</p>
+                
+                <div class="instruction-container">
+                    <h3>How to Play:</h3>
+                    <div class="instruction-step">
+                        <div class="step-number">1</div>
+                        <p><strong>Break Stones:</strong> Click on floating stones to break them into smaller pieces</p>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="step-number">2</div>
+                        <p><strong>Fill Water:</strong> The broken stones will fall into the water</p>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="step-number">3</div>
+                        <p><strong>Build Bridge:</strong> Use A/D or ←/→ keys to move stones in the water to build your bridge</p>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="step-number">4</div>
+                        <p><strong>Complete:</strong> Connect the two shores to complete Ram Setu!</p>
+                    </div>
+                </div>
+                
+                <button type="button" id="start-button" class="game-button">Start Game</button>
+            </div>
+        </div>
+        
+        <div id="pause-screen" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>Game Paused</h2>
+                <button type="button" id="resume-button" class="game-button">Resume</button>
+                <button type="button" id="restart-button" class="game-button">Restart</button>
+            </div>
+        </div>
+        
+        <div id="victory-screen" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>Bridge Complete!</h2>
+                <p>Ram Setu has been built successfully!</p>
+                <div class="final-score">Final Score: <span id="final-score">0</span></div>
+                <button type="button" id="play-again-button" class="game-button">Play Again</button>
+            </div>
+        </div>
+        
+        <!-- Game Instructions will be in the start menu instead of a tutorial overlay -->
+        
+        <!-- Mobile Controls -->
+        <div class="mobile-controls hidden">
+            <button type="button" id="mobile-left" class="mobile-button"><i class="fas fa-arrow-left"></i></button>
+            <button type="button" id="mobile-right" class="mobile-button"><i class="fas fa-arrow-right"></i></button>
+        </div>
+        
+        <!-- Mini Instructions Button -->
+        <button type="button" id="show-instructions" class="instructions-button">
+            <i class="fas fa-question-circle"></i>
+        </button>
+        
+        <!-- Mini Instructions Panel (Hidden by default) -->
+        <div class="mini-instructions hidden">
+            <div class="instructions-content">
+                <p><i class="fas fa-hand-pointer"></i> Click stones to break them</p>
+                <p><i class="fas fa-water"></i> Stones fall into water</p>
+                <p><i class="fas fa-arrows-alt-h"></i> Use A/D or ←/→ to move stones</p>
+                <button type="button" id="close-instructions" class="close-button">×</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
+    <script src="audio.js"></script>
+    <script src="ui.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
