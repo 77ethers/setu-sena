@@ -1,0 +1,224 @@
+/* Upgrade System Styles */
+
+.upgrade-panel {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    width: 320px;
+    background: rgba(50, 30, 10, 0.9);
+    border: 2px solid #d4af37;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+    z-index: 100;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    max-height: 80vh;
+}
+
+.upgrade-header {
+    padding: 10px 15px;
+    background: linear-gradient(to right, #8B0000, #FF7722);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+}
+
+.upgrade-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #FFD700;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.currency-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    color: #FFD700;
+}
+
+.gem-icon {
+    font-size: 1.2em;
+}
+
+.stats-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    font-size: 0.8em;
+    margin-top: 5px;
+}
+
+.toggle-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #FFD700;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.toggle-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.upgrade-list {
+    max-height: 400px;
+    overflow-y: auto;
+    transition: max-height 0.3s ease;
+    scrollbar-width: thin;
+    scrollbar-color: #8B0000 rgba(0, 0, 0, 0.2);
+}
+
+.upgrade-list.collapsed {
+    max-height: 0;
+}
+
+.upgrade-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(214, 173, 55, 0.3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.upgrade-item:hover {
+    background-color: rgba(139, 0, 0, 0.2);
+}
+
+.upgrade-info {
+    flex: 1;
+}
+
+.upgrade-name {
+    font-weight: bold;
+    color: #FFD700;
+    margin-bottom: 3px;
+    font-size: 0.9em;
+}
+
+.upgrade-description {
+    color: #ddd;
+    font-size: 0.75em;
+    margin-bottom: 5px;
+}
+
+.upgrade-effect {
+    font-size: 0.75em;
+    color: #D4AF37;
+    display: flex;
+    flex-direction: column;
+}
+
+.upgrade-action {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+}
+
+.upgrade-level {
+    font-size: 0.75em;
+    color: #ccc;
+}
+
+.upgrade-button {
+    background: linear-gradient(to bottom, #D4AF37, #B8860B);
+    border: none;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8em;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.upgrade-button:hover:not([disabled]) {
+    background: linear-gradient(to bottom, #FFD700, #D4AF37);
+    transform: translateY(-1px);
+}
+
+.upgrade-button:active:not([disabled]) {
+    transform: translateY(1px);
+}
+
+.upgrade-button[disabled] {
+    background: #666;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.upgrade-item.cannot-afford .upgrade-button {
+    background: #777;
+    cursor: not-allowed;
+}
+
+.upgrade-item.maxed {
+    opacity: 0.7;
+}
+
+.upgrade-item.maxed .upgrade-name {
+    color: #FFD700;
+}
+
+/* Auto-break visual indicator */
+.auto-break-indicator {
+    position: absolute;
+    font-size: 1.2em;
+    transition: all 0.5s ease;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+/* Progress bar for clicks */
+.click-progress {
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    position: absolute;
+    bottom: 0;
+    left: 0;
+}
+
+.click-progress-inner {
+    height: 100%;
+    background: #FFD700;
+    width: 0%;
+    transition: width 0.2s linear;
+}
+
+/* Pop-up notifications */
+.notification {
+    position: absolute;
+    padding: 5px 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    border-radius: 20px;
+    font-size: 0.9em;
+    opacity: 0;
+    transition: all 0.5s ease;
+    transform: translateY(0);
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.notification.shard {
+    color: #5DADE2;
+}
+
+.notification.critical {
+    color: #FF5733;
+    font-weight: bold;
+}

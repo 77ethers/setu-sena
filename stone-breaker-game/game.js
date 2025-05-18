@@ -1,5 +1,8 @@
 // Initialize game variables
 let score = 0;
+let upgradeSystem = null; // Will hold the upgrade system
+let boulderSystem = null; // Will hold the boulder system
+let lastStoneBreakTime = Date.now(); // Track time between breaks for idle mechanics
 
 // Ramayana theme colors
 const stoneColors = [
@@ -177,6 +180,9 @@ const Engine = Matter.Engine,
       Body = Matter.Body,
       Composite = Matter.Composite,
       Events = Matter.Events,
+      
+      // Make Matter objects available for external systems
+      World = Matter.World,
       Mouse = Matter.Mouse,
       Query = Matter.Query,
       Constraint = Matter.Constraint,
@@ -594,8 +600,12 @@ function createStoneParticles(position, size, color) {
 
 // Function to break a stone into smaller stones
 function breakStone(stone) {
-    // Don't break stones that are already broken
-    if (stone.isBroken) return;
+    // Don't break stones that are already broken or part of the bridge
+    if (stone.isBroken || stone.isPartOfBridge) return;
+    
+    // Track when this stone was broken for pacing
+    const now = Date.now();
+    lastStoneBreakTime = now;
     
     // Mark as broken
     stone.isBroken = true;
@@ -618,9 +628,69 @@ function breakStone(stone) {
         bounds.max.y - bounds.min.y
     );
     
+    // Check for critical break from upgrade system
+    let isCriticalBreak = false;
+    if (upgradeSystem) {
+        isCriticalBreak = upgradeSystem.checkCriticalBreak();
+        
+        // Visual effect for critical break
+        if (isCriticalBreak) {
+            createCriticalEffect(position);
+        }
+    }
+    
     // Create particles for visual effect
     const particles = createStoneParticles(position, stoneSize / 2, color);
     Composite.add(world, particles);
+    
+    // Play break sound with variation based on stone size
+    if (window.audioManager) {
+        let pitch = 0.8;
+        if (category === 'small') pitch += 0.4;
+        else if (category === 'medium') pitch += 0.2;
+        
+        if (stone.specialType === 'hanuman') {
+            window.audioManager.playSound('breakHanuman');
+        } else if (stone.specialType === 'rama') {
+            window.audioManager.playSound('breakRama');
+        } else {
+            window.audioManager.playSound('stoneBreak', 1.0, pitch);
+        }
+    }
+    
+    // Add shards (upgrade currency) when stone is broken
+    if (upgradeSystem) {
+        let shardAmount = 0;
+        if (category === 'large') {
+            shardAmount = 3;
+        } else if (category === 'medium') {
+            shardAmount = 2;
+        } else {
+            shardAmount = 1;
+        }
+        
+        // Bonus shards for special stones
+        if (stone.specialType) {
+            shardAmount *= 2;
+        }
+        
+        // If critical break, double shards
+        if (isCriticalBreak) {
+            shardAmount *= 2;
+        }
+        
+        const actualShards = upgradeSystem.addCurrency(shardAmount);
+        
+        // Show shard gain notification if it wasn't an auto-break
+        if (!stone.autoBreak) {
+            showNotification(
+                position.x, 
+                position.y - 30, 
+                `+${actualShards} 💎`, 
+                isCriticalBreak ? 'critical' : 'shard'
+            );
+        }
+    }
     
     // Create smaller stones based on the current stone's category
     if (category === 'large') {
@@ -678,7 +748,28 @@ function breakStone(stone) {
     else if (category === 'medium') pointValue = 20;
     else if (category === 'small') pointValue = 30; // Bonus for breaking the smallest stones
     
+    // Apply special stone score multiplier
+    if (stone.specialType && specialStoneTypes[stone.specialType].scoreMultiplier) {
+        pointValue *= specialStoneTypes[stone.specialType].scoreMultiplier;
+    }
+    
+    // Apply critical break multiplier (2x points)
+    if (isCriticalBreak) {
+        pointValue *= 2;
+    }
+    
+    // Update score
     updateScore(pointValue);
+    
+    // Show score notification for manual clicks (not auto-breaks)
+    if (!stone.autoBreak && gameRunning) {
+        showNotification(
+            position.x, 
+            position.y - 15, 
+            `+${pointValue}`, 
+            isCriticalBreak ? 'critical' : ''
+        );
+    }
 }
 
 // Update the bridge completion percentage
@@ -1149,6 +1240,11 @@ function restartGameEngine() {
     bridgeParts = [];
     joinedStoneBodies = new Set();
     
+    // Clean up boulder system if it exists
+    if (boulderSystem) {
+        boulderSystem.cleanup();
+    }
+    
     // Clear all bodies except walls
     const bodies = Composite.allBodies(world);
     bodies.forEach(body => {
@@ -1223,44 +1319,84 @@ function startStoneGeneration() {
         }
         
         if (floatingStoneCount < maxFloatingStones && bridgeProgress < 95) {
-            // Determine if we should spawn a special stone
-            const rand = Math.random();
-            let specialType = null;
-            
-            // Weighted selection of special stones based on their spawn chance
-            let cumulativeChance = 0;
-            for (const [type, props] of Object.entries(specialStoneTypes)) {
-                cumulativeChance += props.spawnChance;
-                if (rand < cumulativeChance) {
-                    specialType = type;
-                    break;
-                }
-            }
-            
-            // Determine stone size with progression-based weighting
-            let sizes = ['large', 'medium'];
-            if (progressionPhase >= 1) {
-                // Add some small stones in later phases
-                sizes.push('medium', 'small');
-            }
-            if (progressionPhase >= 2) {
-                // Add even more variety in the final phase
-                sizes.push('small', 'small');
-            }
-            
-            const randomSize = sizes[Math.floor(Math.random() * sizes.length)];
+            // Determine if we should spawn a boulder instead of a regular stone
+            // Chance increases with progression phase - much higher chances now
+            const boulderChance = 0.15 + (progressionPhase * 0.1); // 15%, 25%, or 35% chance
+            const spawnBoulder = boulderSystem && Math.random() < boulderChance;
             
             // Create spawn position with more variation
             const canvasWidth = render.options.width;
-            const spawnX = Math.random() * (canvasWidth * 0.8) + (canvasWidth * 0.1);
-            const spawnY = hudHeight + 50 + (Math.random() * 100); // Random height within the game area
+            const randomX = Math.random() * (canvasWidth * 0.8) + (canvasWidth * 0.1);
+            const randomY = hudHeight + 50 + (Math.random() * 100); // Random height within the game area
             
-            // Create the stone with special properties if applicable
-            Composite.add(world, createStone({ 
-                size: randomSize,
-                specialType: specialType,
-                position: { x: spawnX, y: spawnY },
-                // Add a bit of initial rotation for more dynamic movement
+            if (spawnBoulder) {
+                // Create a boulder (requires multiple hits)
+                console.log('Spawning boulder with new system...');
+                try {
+                    // Increase chances of special boulder types in later phases
+                    let boulderType = null;
+                    if (progressionPhase >= 2 && Math.random() < 0.4) {
+                        boulderType = 'celestial'; // More divine boulders in late game
+                    } else if (progressionPhase >= 1 && Math.random() < 0.3) {
+                        boulderType = 'ravana'; // More ravana boulders in mid game
+                    }
+                    
+                    const boulder = boulderSystem.createBoulder({
+                        position: { x: randomX, y: randomY },
+                        boulderType: boulderType
+                    });
+                    
+                    // Safety check that a boulder was created
+                    if (boulder) {
+                        // Add the boulder to the world
+                        Composite.add(world, boulder);
+                        
+                        // Play boulder appearance sound if audio manager exists
+                        if (window.audioManager) {
+                            window.audioManager.playSound('stoneAppear', 0.9, 0.7);
+                        }
+                        
+                        console.log('Boulder spawned successfully');
+                    } else {
+                        console.warn('Boulder creation returned null');
+                    }
+                } catch (error) {
+                    console.error('Error spawning boulder:', error);
+                }
+            } else {
+                // Determine if we should spawn a special stone
+                const rand = Math.random();
+                let specialType = null;
+                
+                // Weighted selection of special stones based on their spawn chance
+                let cumulativeChance = 0;
+                for (const [type, props] of Object.entries(specialStoneTypes)) {
+                    cumulativeChance += props.spawnChance;
+                    if (rand < cumulativeChance) {
+                        specialType = type;
+                        break;
+                    }
+                }
+                
+                // Determine stone size with progression-based weighting
+                let sizes = ['large', 'medium'];
+                if (progressionPhase >= 1) {
+                    // Add some small stones in later phases
+                    sizes.push('medium', 'small');
+                }
+                if (progressionPhase >= 2) {
+                    // Add even more variety in the final phase
+                    sizes.push('small', 'small');
+                }
+                
+                const randomSize = sizes[Math.floor(Math.random() * sizes.length)];
+                
+                // Create the stone with special properties if applicable
+                Composite.add(world, createStone({ 
+                    size: randomSize,
+                    specialType: specialType,
+                    position: { x: spawnX, y: spawnY},
+                    // Add a bit of initial rotation for more dynamic movement
                 angle: Math.random() * Math.PI * 2,
                 // Occasionally add some angular velocity for spinning stones
                 angularVelocity: (Math.random() > 0.7) ? (Math.random() - 0.5) * 0.05 : 0
@@ -1292,6 +1428,7 @@ function startStoneGeneration() {
                     }
                 }, 500); // Slight delay for the pattern
             }
+            }
             
             stoneSpawnCount++;
         }
@@ -1303,6 +1440,40 @@ let stoneSpawnCount = 0;
 
 // Initialize game with stones scaled to screen size
 function initGame() {
+    // Initialize the upgrade system if it doesn't exist yet
+    if (!upgradeSystem) {
+        // Set up global access to needed functions for idle mechanics
+        window.breakStone = breakStone;
+        window.updateScore = updateScore;
+        window.world = world;
+        
+        upgradeSystem = new UpgradeSystem({
+            updateScore: updateScore,
+            breakStone: breakStone,
+            world: world,
+            gameRunning: gameRunning
+        });
+        window.upgradeSystem = upgradeSystem;
+    }
+    
+    // Initialize the boulder system if it doesn't exist yet
+    if (!boulderSystem) {
+        // Make key game objects available globally for boulder system
+        window.world = world;
+        window.updateScore = updateScore;
+        window.createStone = createStone;
+        window.showNotification = showNotification;
+        
+        // Create boulder system with direct access to needed objects
+        boulderSystem = new BoulderSystem();
+        window.boulderSystem = boulderSystem;
+        
+        console.log('Multi-hit boulder system initialized');
+    }
+    
+    // Make utility functions available globally
+    window.showNotification = showNotification;
+    
     // Scale number of stones based on screen size
     const screenArea = windowWidth * windowHeight;
     const baseArea = 800 * 600;
@@ -1353,6 +1524,12 @@ function setupMouseClickHandler() {
     if (!Composite.allConstraints(world).includes(mouseConstraint)) {
         Composite.add(world, mouseConstraint);
     }
+    
+    // Get click power for use with boulders or stones
+    const getClickPower = () => upgradeSystem ? upgradeSystem.clickPower : 1;
+    
+    // Track if we clicked a stone/boulder in this click event
+    let clickHandled = false;
     
     // Set up click handler
     Events.on(mouseConstraint, 'mousedown', (event) => {
@@ -1409,18 +1586,75 @@ function setupMouseClickHandler() {
             });
         }
         
-        // Only process the first (closest) valid body
+        // First try exact point detection
+        const queryBodies = Query.point(Composite.allBodies(world), mousePosition);
         let processed = false;
-        for (let body of clickedBodies) {
-            // Skip if already processed a body or if it's not a block
-            if (processed) break;
+        
+        // Check if we clicked on a boulder first
+        for (let body of queryBodies) {
+            if (body.isBoulder && boulderSystem && !processed) {
+                console.log('Boulder clicked');
+                // Hit boulder with current click power
+                const boulderBroken = boulderSystem.hitBoulder(body, getClickPower());
+                processed = true;
+                break;
+            }
+        }
+        
+        // Handle stone breaking or bridge part movement based on what was clicked
+        if (queryBodies.length > 0) {
+            // Sort from top to bottom (visually) to handle overlapping stones naturally
+            queryBodies.sort((a, b) => a.position.y - b.position.y);
             
-            // Log body details to help debug
-            logBodyDetails(body);
-            
-            // Check if it's a stone (not a wall or a particle)
-            if (!body.isStatic && body.stoneCategory) {
-                console.log('Breaking stone:', body.stoneCategory);
+            for (const body of queryBodies) {
+                if (processed) break;
+                
+                // Case 1: Boulder that needs multiple hits
+                if (body.isBoulder && boulderSystem) {
+                    // Apply damage to boulder based on click power
+                    const boulderBroken = boulderSystem.hitBoulder(body, getClickPower());
+                    processed = true;
+                    
+                    // If boulder fully broken, additional stone breaks from click power are handled in the boulder system
+                    if (boulderBroken) break;
+                }
+                // Case 2: Breakable stone that's not part of the bridge
+                else if (!body.isStatic && body.breakable !== false && !body.isPartOfBridge && !body.isBroken) {
+                    // Apply click power to break multiple stones at once
+                    const clickPower = getClickPower();
+                    
+                    // Break the directly clicked stone
+                    breakStone(body);
+                    
+                    // Use remaining click power to break random stones (if clickPower > 1)
+                    if (clickPower > 1) {
+                        const breakableStones = Composite.allBodies(world).filter(b => 
+                            !b.isStatic && !b.isBroken && !b.isPartOfBridge && 
+                            b.breakable !== false && !b.isBoulder && b !== body
+                        );
+                        
+                        // Break additional random stones based on remaining click power
+                        for (let i = 1; i < clickPower && breakableStones.length > 0; i++) {
+                            const randomIndex = Math.floor(Math.random() * breakableStones.length);
+                            const randomStone = breakableStones[randomIndex];
+                            
+                            // Mark as auto-break to differentiate from manual breaks
+                            randomStone.autoBreak = true;
+                            
+                            // Break with slight delay for visual effect
+                            setTimeout(() => {
+                                breakStone(randomStone);
+                                // Unmark auto-break flag after processing
+                                delete randomStone.autoBreak;
+                            }, 100 * i);
+                            
+                            // Remove from array to prevent breaking the same stone twice
+                            breakableStones.splice(randomIndex, 1);
+                        }
+                    }
+                    
+                    processed = true;
+                }
                 
                 // Play sound effect
                 if (window.audioManager) {
@@ -1734,10 +1968,15 @@ function spawnHanumanArmyPattern() {
     }, 1000);
 }
 
-// Add gentle floating animation for unbroken stones (Ram Setu theme)
+// Add gentle floating animation and update systems
 Events.on(engine, 'beforeUpdate', function() {
-    // Only apply float animations if game is running
+    // Only update if game is running
     if (!gameRunning) return;
+    
+    // Update boulder system if it exists (health bars, cracks, etc.)
+    if (boulderSystem) {
+        boulderSystem.update();
+    }
     
     // Get all bodies and filter for unbroken stones
     const bodies = Composite.allBodies(world);
@@ -1816,3 +2055,109 @@ window.pauseGameEngine = pauseGameEngine;
 window.resumeGameEngine = resumeGameEngine;
 window.restartGameEngine = restartGameEngine;
 window.spawnStoneWave = spawnStoneWave; // Expose the new spawn function
+window.breakStone = breakStone; // Expose breakStone for upgrade system
+
+// Function to create visual effect for critical breaks
+function createCriticalEffect(position) {
+    // Create a flash effect
+    const flash = document.createElement('div');
+    flash.className = 'critical-flash';
+    flash.style.left = `${position.x}px`;
+    flash.style.top = `${position.y}px`;
+    flash.style.width = '80px';
+    flash.style.height = '80px';
+    flash.style.position = 'absolute';
+    flash.style.borderRadius = '50%';
+    flash.style.background = 'radial-gradient(circle, rgba(255,215,0,0.8) 0%, rgba(255,69,0,0) 70%)';
+    flash.style.transform = 'translate(-50%, -50%)';
+    flash.style.zIndex = '100';
+    flash.style.pointerEvents = 'none';
+    flash.style.animation = 'critical-pulse 0.6s ease-out';
+    
+    // Add keyframes for the animation
+    if (!document.querySelector('#critical-keyframes')) {
+        const keyframes = document.createElement('style');
+        keyframes.id = 'critical-keyframes';
+        keyframes.innerHTML = `
+            @keyframes critical-pulse {
+                0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.9; }
+                100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(keyframes);
+    }
+    
+    document.body.appendChild(flash);
+    
+    // Remove after animation completes
+    setTimeout(() => {
+        if (document.body.contains(flash)) {
+            document.body.removeChild(flash);
+        }
+    }, 600);
+}
+
+// Function to show pop-up notification
+function showNotification(x, y, text, className = '') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${className}`;
+    notification.style.left = `${x}px`;
+    notification.style.top = `${y}px`;
+    notification.textContent = text;
+    
+    document.body.appendChild(notification);
+    
+    // Animate
+    setTimeout(() => {
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateY(-20px)';
+        
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateY(-40px)';
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 500);
+        }, 800);
+    }, 10);
+}
+
+// Function to create click ripple effect
+function createClickEffect(x, y) {
+    const ripple = document.createElement('div');
+    ripple.className = 'click-ripple';
+    ripple.style.left = `${x}px`;
+    ripple.style.top = `${y}px`;
+    ripple.style.position = 'absolute';
+    ripple.style.width = '10px';
+    ripple.style.height = '10px';
+    ripple.style.borderRadius = '50%';
+    ripple.style.background = 'rgba(255, 255, 255, 0.6)';
+    ripple.style.transform = 'translate(-50%, -50%)';
+    ripple.style.zIndex = '90';
+    ripple.style.pointerEvents = 'none';
+    ripple.style.animation = 'ripple 0.4s linear';
+    
+    // Add keyframes for the animation if not already added
+    if (!document.querySelector('#ripple-keyframes')) {
+        const keyframes = document.createElement('style');
+        keyframes.id = 'ripple-keyframes';
+        keyframes.innerHTML = `
+            @keyframes ripple {
+                0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+                100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(keyframes);
+    }
+    
+    document.body.appendChild(ripple);
+    
+    // Remove after animation completes
+    setTimeout(() => {
+        if (document.body.contains(ripple)) {
+            document.body.removeChild(ripple);
+        }
+    }, 400);
+}
