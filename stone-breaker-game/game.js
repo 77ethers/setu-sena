@@ -12,7 +12,7 @@ let bridgeParts = []; // To track stones that form the bridge
 let joinedStoneBodies = new Set(); // Keep track of which stones are part of the bridge
 
 // Ocean rendering variables
-let oceanHeight = 0.4; // Ocean takes 40% of the canvas height
+let oceanHeight = 0.3; // Ocean takes 30% of the canvas height
 let oceanY = 0; // Will be set based on screen height
 let waveAmplitude = 5; // Wave height in pixels
 let waveFrequency = 0.02; // Wave frequency
@@ -170,7 +170,7 @@ Events.on(render, 'afterRender', function() {
     waveOffset += waveSpeed;
     if (waveOffset > 1000) waveOffset = 0;
     
-    // Calculate ocean position (40% from bottom of screen)
+    // Calculate ocean position (30% from bottom of screen)
     oceanY = windowHeight * (1 - oceanHeight);
     waterLevel = oceanY;
     
@@ -283,7 +283,7 @@ Composite.add(world, [
     Bodies.rectangle(windowWidth + 50, windowHeight / 2, 100, windowHeight + 100, wallOptions)
 ]);
 
-// Calculate ocean position (40% from bottom of screen)
+// Calculate ocean position (30% from bottom of screen)
 waterLevel = windowHeight * (1 - oceanHeight);
 
 // Calculate shore positions - these are now managed in the render event
