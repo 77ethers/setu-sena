@@ -4,6 +4,8 @@ class UIManager {
     constructor() {
         this.gameState = 'start'; // start, playing, paused, victory
         this.isMobile = false;
+        this.spawnButtonCooldown = false; // Track cooldown state for spawn button
+        this.spawnCooldownTimer = null; // Timer for cooldown
         
         // Cache DOM elements
         this.elements = {};
@@ -43,6 +45,7 @@ class UIManager {
         this.elements.pauseGameButton = document.getElementById('pause-game');
         this.elements.muteToggleButton = document.getElementById('mute-toggle');
         this.elements.muteIcon = this.elements.muteToggleButton.querySelector('i');
+        this.elements.spawnStonesButton = document.getElementById('spawn-stones');
         
         // Mini Instructions Elements
         this.elements.showInstructionsButton = document.getElementById('show-instructions');
@@ -88,6 +91,13 @@ class UIManager {
         this.elements.muteToggleButton.addEventListener('click', () => {
             this.toggleMute();
         });
+        
+        // Spawn Stones button
+        if (this.elements.spawnStonesButton) {
+            this.elements.spawnStonesButton.addEventListener('click', () => {
+                this.spawnStones();
+            });
+        }
         
         // Mini Instructions toggle
         if (this.elements.showInstructionsButton) {
@@ -304,6 +314,89 @@ class UIManager {
         // This method is no longer used since we're drawing water directly in the canvas
         // but we'll keep it for compatibility
     }
+    
+    // Spawn stones when button is clicked
+    spawnStones() {
+        // Don't allow spawning if not in playing state or during cooldown
+        if (this.gameState !== 'playing' || this.spawnButtonCooldown) {
+            return;
+        }
+        
+        // Call the game's stone wave spawn function
+        if (window.spawnStoneWave) {
+            window.spawnStoneWave();
+            
+            // Start cooldown
+            this.startSpawnButtonCooldown();
+        }
+    }
+    
+    // Manage spawn button cooldown
+    startSpawnButtonCooldown() {
+        // Set cooldown state
+        this.spawnButtonCooldown = true;
+        
+        if (!this.elements.spawnStonesButton) return;
+        
+        // Update button appearance
+        this.elements.spawnStonesButton.disabled = true;
+        this.elements.spawnStonesButton.classList.add('cooldown');
+        
+        // Add a visual indicator for the cooldown
+        const cooldownOverlay = document.createElement('div');
+        cooldownOverlay.className = 'cooldown-overlay';
+        this.elements.spawnStonesButton.appendChild(cooldownOverlay);
+        
+        // Animate the cooldown (5 seconds)
+        const cooldownDuration = 5000; // 5 seconds cooldown
+        const startTime = Date.now();
+        
+        // Clear any existing cooldown timer
+        if (this.spawnCooldownTimer) {
+            clearInterval(this.spawnCooldownTimer);
+        }
+        
+        // Update the cooldown animation
+        this.spawnCooldownTimer = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, cooldownDuration - elapsed);
+            const progress = (remaining / cooldownDuration) * 100;
+            
+            // Update the overlay height to show progress
+            if (cooldownOverlay && cooldownOverlay.parentNode) {
+                cooldownOverlay.style.height = progress + '%';
+            }
+            
+            // End cooldown when complete
+            if (remaining <= 0) {
+                clearInterval(this.spawnCooldownTimer);
+                this.endSpawnButtonCooldown();
+            }
+        }, 50);
+    }
+    
+    // End cooldown state
+    endSpawnButtonCooldown() {
+        this.spawnButtonCooldown = false;
+        
+        if (!this.elements.spawnStonesButton) return;
+        
+        // Remove cooldown styling
+        this.elements.spawnStonesButton.disabled = false;
+        this.elements.spawnStonesButton.classList.remove('cooldown');
+        
+        // Remove the cooldown overlay
+        const cooldownOverlay = this.elements.spawnStonesButton.querySelector('.cooldown-overlay');
+        if (cooldownOverlay) {
+            cooldownOverlay.remove();
+        }
+        
+        // Add a brief highlight effect
+        this.elements.spawnStonesButton.classList.add('ready');
+        setTimeout(() => {
+            this.elements.spawnStonesButton.classList.remove('ready');
+        }, 500);
+    }
 }
 
 // Create global UI manager instance
@@ -313,3 +406,4 @@ const uiManager = new UIManager();
 window.showVictory = (score) => uiManager.showVictory(score);
 window.updateScoreUI = (score) => uiManager.updateScore(score);
 window.updateBridgeProgressUI = (percentage) => uiManager.updateBridgeProgress(percentage);
+window.startSpawnButtonCooldown = () => uiManager.startSpawnButtonCooldown();

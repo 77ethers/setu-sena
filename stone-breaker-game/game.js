@@ -1,7 +1,53 @@
 // Initialize game variables
 let score = 0;
-const stoneColors = ['#7f8c8d', '#95a5a6', '#bdc3c7', '#34495e', '#7f8c8d'];
-const particleColors = ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db'];
+
+// Ramayana theme colors
+const stoneColors = [
+    '#FF7722', // Saffron (sacred color)
+    '#8B0000', // Maroon (representing strength)
+    '#D4AF37', // Gold (divine element)
+    '#654321', // Brown (earth element)
+    '#B87333'  // Copper (traditional metal)
+];
+
+// Special stone types with Ramayana significance
+const specialStoneTypes = {
+    hanuman: { // Strength stones - harder to break but give more points
+        color: '#FF4500', // Orange-red
+        density: 0.008,
+        restitution: 0.6,
+        scoreMultiplier: 2,
+        breakable: true,
+        spawnChance: 0.15 // 15% chance
+    },
+    vanar: { // Monkey army stones - break into more fragments
+        color: '#CD853F', // Golden brown
+        density: 0.005,
+        restitution: 0.7,
+        fragmentMultiplier: 2,
+        breakable: true,
+        spawnChance: 0.2 // 20% chance
+    },
+    rama: { // Divine stones - golden with special effects
+        color: '#FFD700', // Gold
+        density: 0.005,
+        restitution: 0.8,
+        scoreMultiplier: 3,
+        breakable: true,
+        glowEffect: true,
+        spawnChance: 0.1 // 10% chance (rare)
+    },
+    nal: { // Builder stones - better for bridge building
+        color: '#6B8E23', // Olive green
+        density: 0.006,
+        friction: 0.8, // Higher friction for better bridge building
+        bridgeValueMultiplier: 1.5,
+        breakable: true,
+        spawnChance: 0.25 // 25% chance
+    }
+};
+
+const particleColors = ['#FF7722', '#FFD700', '#8B0000', '#FFA500', '#B87333'];
 
 // Bridge building variables
 let bridgeProgress = 0;
@@ -147,6 +193,8 @@ const world = engine.world;
 // Get window dimensions for full-screen canvas
 const windowWidth = window.innerWidth;
 const windowHeight = window.innerHeight;
+const hudHeight = 60; // HUD bar height in pixels
+const gameAreaHeight = windowHeight - hudHeight; // Actual game area height
 
 // Create renderer
 const render = Render.create({
@@ -271,22 +319,25 @@ waterLevel = windowHeight * 0.75; // 75% from the top of the screen
 leftShoreX = windowWidth * 0.08; // 8% from the left edge
 rightShoreX = windowWidth * 0.92; // 8% from the right edge
 
-// Add walls to prevent stones from leaving the screen
+// Create boundaries (walls and ceiling)
 Composite.add(world, [
-    // Top wall
-    Bodies.rectangle(windowWidth / 2, -50, windowWidth + 100, 100, wallOptions),
-    // Bottom wall (below water)
-    Bodies.rectangle(windowWidth / 2, windowHeight + 50, windowWidth + 100, 100, wallOptions),
     // Left wall
-    Bodies.rectangle(-50, windowHeight / 2, 100, windowHeight + 100, wallOptions),
+    Bodies.rectangle(-50, gameAreaHeight / 2 + hudHeight, 100, gameAreaHeight + 100, wallOptions),
     // Right wall
-    Bodies.rectangle(windowWidth + 50, windowHeight / 2, 100, windowHeight + 100, wallOptions)
+    Bodies.rectangle(windowWidth + 50, gameAreaHeight / 2 + hudHeight, 100, gameAreaHeight + 100, wallOptions),
+    // Ceiling (just below HUD, to prevent stones from going into HUD area)
+    Bodies.rectangle(windowWidth / 2, hudHeight, windowWidth, 1, {
+        isStatic: true,
+        render: { fillStyle: 'transparent', visible: false }, // Invisible barrier
+        label: 'ceiling',
+        collisionFilter: { group: 0, category: 0x0001, mask: 0xFFFFFFFF }
+    })
 ]);
 
-// Calculate ocean position (30% from bottom of screen)
-waterLevel = windowHeight * (1 - oceanHeight);
+// Calculate ocean position (30% from bottom of screen, but adjusted for HUD height)
+waterLevel = hudHeight + (gameAreaHeight * (1 - oceanHeight));
 
-// Calculate shore positions - these are now managed in the render event
+// Calculate shore positions - adjusted for game area
 leftShoreX = windowWidth * 0.08; // 8% of screen width
 rightShoreX = windowWidth - leftShoreX;
 
@@ -322,29 +373,32 @@ Composite.add(world, [waterSurface, bottomBarrier]);
 
 // Function to create a stone with specified size, position, and velocity
 function createStone(options = {}) {
-    // Default values
-    const size = options.size || 'large';
-    
-    // Calculate safe area for stone creation (above water)
-    const safeWaterY = waterLevel || windowHeight * (1 - oceanHeight);
-    const topMargin = 80; // Keep stones away from top edge
-    
-    // Position stones only in the top area, above water
-    const position = options.position || { 
-        x: Math.random() * (windowWidth * 0.7) + (windowWidth * 0.15), // Keep away from edges
-        y: Math.random() * (safeWaterY * 0.5) + topMargin // Only top half of air space
+    // Default options
+    options = {
+        size: 'large',  // large, medium, or small
+        specialType: null, // hanuman, vanar, rama, or nal (or null for normal stone)
+        position: { 
+            x: Math.random() * (render.options.width * 0.8) + (render.options.width * 0.1), 
+            y: hudHeight + 50 + (Math.random() * 50) // Start well below the HUD area
+        },
+        velocity: {
+            x: (Math.random() - 0.5) * 0.5,
+            y: (Math.random() - 0.5) * 0.2 // Very minimal vertical movement
+        },
+        angle: 0, // Initial angle
+        angularVelocity: 0, // Initial spin
+        ...options  // Overwrite defaults with provided options
     };
     
-    // Make sure position is valid
-    if (!options.position && position.y > safeWaterY - 100) {
-        position.y = safeWaterY * 0.3; // Fallback to safe position if too close to water
+    // Make sure position is valid (safety check)
+    if (options.position.y > waterLevel - 100) {
+        options.position.y = hudHeight + 50; // Fallback to safe position if too close to water
     }
     
-    const velocity = options.velocity || { x: 0, y: 0 };
     const isBroken = options.isBroken || false; // New flag to track if stone has been broken
     
     // Determine size based on category
-    const sizeRange = stoneSizes[size];
+    const sizeRange = stoneSizes[options.size];
     const sizeValue = Math.random() * (sizeRange.max - sizeRange.min) + sizeRange.min;
     
     // Generate random color
@@ -356,46 +410,91 @@ function createStone(options = {}) {
     
     // Add some irregularity to make shapes more interesting
     // For small stones, add less irregularity to keep them recognizable
-    const irregularityAmount = size === 'small' ? sizeValue * 0.1 : sizeValue * 0.15;
+    const irregularityAmount = options.size === 'small' ? sizeValue * 0.1 : sizeValue * 0.15;
     vertices = addIrregularity(vertices, irregularityAmount);
     
     // Create the base stone body
-    const stone = Bodies.polygon(position.x, position.y, vertices.length, sizeValue, {
-        restitution: 0.4,
-        friction: 0.01,
-        frictionAir: 0.001,
-        angle: Math.random() * Math.PI * 2,
-        render: {
-            fillStyle: stoneColors[colorIndex],
-            strokeStyle: '#2c3e50',
-            lineWidth: 2
+    const body = Bodies.fromVertices(
+        options.position.x,
+        options.position.y,
+        [vertices],
+        {
+            restitution: 0.4,
+            friction: 0.01,
+            frictionAir: 0.001,
+            angle: Math.random() * Math.PI * 2,
+            render: {
+                fillStyle: stoneColors[colorIndex],
+                strokeStyle: '#2c3e50',
+                lineWidth: 2
+            }
         }
-    });
+    );
     
     // Add custom properties
-    stone.stoneCategory = size;
-    stone.shapeType = shapeType;
-    stone.isBroken = isBroken;
-    stone.inWater = false;
-    stone.originalColor = stoneColors[colorIndex];
-    stone.isPartOfBridge = false;
+    body.stoneCategory = options.size;
+    body.shapeType = shapeType;
+    body.isBroken = isBroken;
+    body.inWater = false;
+    body.originalColor = stoneColors[colorIndex];
+    
+    // Special floating physics for unbroken stones to give the proper Ram Setu stone floating effect
+    if (!isBroken) {
+        // Make unbroken stones float with very low friction
+        body.frictionAir = 0.02;     // Higher air friction to give floating effect
+        body.friction = 0.1;         // Lower surface friction
+        body.restitution = 0.7;      // More bouncy
+        body.timeScale = 0.7;        // Slow down physics for floating effect
+        
+        // Force that will periodically be applied to create gentle floating movement
+        body.floatForce = {
+            x: (Math.random() - 0.5) * 0.0001,
+            y: (Math.random() - 0.5) * 0.0001
+        };
+    }
+    body.isPartOfBridge = false;
+    
+    // Add special stone properties if provided
+    if (options.specialType && specialStoneTypes[options.specialType]) {
+        body.specialType = options.specialType;
+        body.scoreMultiplier = specialStoneTypes[options.specialType].scoreMultiplier || 1;
+        body.fragmentMultiplier = specialStoneTypes[options.specialType].fragmentMultiplier || 1;
+        body.bridgeValueMultiplier = specialStoneTypes[options.specialType].bridgeValueMultiplier || 1;
+        
+        // Update the render properties for special stones
+        body.render.fillStyle = specialStoneTypes[options.specialType].color;
+        if (specialStoneTypes[options.specialType].glowEffect) {
+            body.render.lineWidth = 2;
+            body.render.strokeStyle = '#FFFF00';
+        }
+    }
+
+    // Set initial velocity
+    Body.setVelocity(body, options.velocity);
     
     // Override the vertices with our custom shape
-    Body.setVertices(stone, vertices);
+    Body.setVertices(body, vertices);
     
-    // Apply initial velocity if provided
-    if (velocity.x !== 0 || velocity.y !== 0) {
-        Body.setVelocity(stone, velocity);
-    } else if (!isBroken) {
+    // Apply initial velocity and rotation if provided
+    if (options.angle) {
+        Body.setAngle(body, options.angle);
+    }
+    
+    if (options.angularVelocity) {
+        Body.setAngularVelocity(body, options.angularVelocity);
+    }
+    
+    // Add some random forces for more natural movement
+    if (!isBroken) {
         // Only apply random forces to floating stones (not broken ones)
-        const forceMagnitude = 0.005 * stone.mass;
-        Body.applyForce(stone, stone.position, {
+        const forceMagnitude = 0.005 * body.mass;
+        Body.applyForce(body, body.position, {
             x: (Math.random() - 0.5) * forceMagnitude,
             y: (Math.random() - 0.5) * forceMagnitude
         });
     }
-    
-    return stone;
+
+    return body;
 }
 
 // Function to create stone particles when a stone breaks
@@ -495,6 +594,18 @@ function createStoneParticles(position, size, color) {
 
 // Function to break a stone into smaller stones
 function breakStone(stone) {
+    // Don't break stones that are already broken
+    if (stone.isBroken) return;
+    
+    // Mark as broken
+    stone.isBroken = true;
+    
+    // Apply physics changes for broken stones
+    stone.timeScale = 1.0; // Return to normal physics time scale
+    stone.frictionAir = 0.001; // Lower air friction for falling
+    stone.friction = 0.8; // Higher surface friction for stability in bridge
+    stone.restitution = 0.3; // Less bouncy when broken
+    
     const position = stone.position;
     const color = stone.render.fillStyle;
     const category = stone.stoneCategory;
@@ -1077,20 +1188,118 @@ function startStoneGeneration() {
         clearInterval(stoneGenerationInterval);
     }
     
+    // Track game progression to increase challenge and interest
+    let progressionPhase = 0;
+    let spawnRate = 3000; // Starting spawn rate in ms
+    let maxFloatingStones = 8; // Initial max floating stones
+    
+    // Enhanced stone generation with varying patterns
     stoneGenerationInterval = setInterval(() => {
         // Count actual floating stones (not particles, not broken stones)
         const floatingStoneCount = Composite.allBodies(world).filter(body => {
             return !body.isStatic && !body.hasOwnProperty('lifespan') && !body.isBroken;
         }).length;
         
-        if (floatingStoneCount < 8 && bridgeProgress < 90) { // Add stones until bridge is almost complete
-            const sizes = ['large', 'medium'];
+        // Update spawn button highlighting based on stone count
+        updateSpawnButtonHighlight(floatingStoneCount, maxFloatingStones);
+        
+        // Check game progression to adapt difficulty
+        if (bridgeProgress > 30 && progressionPhase === 0) {
+            progressionPhase = 1;
+            spawnRate = 2500; // Faster spawns
+            maxFloatingStones = 10; // More simultaneous stones
+            // Update the interval
+            clearInterval(stoneGenerationInterval);
+            startStoneGeneration();
+            return;
+        } else if (bridgeProgress > 60 && progressionPhase === 1) {
+            progressionPhase = 2;
+            spawnRate = 2000; // Even faster
+            maxFloatingStones = 12; // Even more stones
+            // Update the interval
+            clearInterval(stoneGenerationInterval);
+            startStoneGeneration();
+            return;
+        }
+        
+        if (floatingStoneCount < maxFloatingStones && bridgeProgress < 95) {
+            // Determine if we should spawn a special stone
+            const rand = Math.random();
+            let specialType = null;
+            
+            // Weighted selection of special stones based on their spawn chance
+            let cumulativeChance = 0;
+            for (const [type, props] of Object.entries(specialStoneTypes)) {
+                cumulativeChance += props.spawnChance;
+                if (rand < cumulativeChance) {
+                    specialType = type;
+                    break;
+                }
+            }
+            
+            // Determine stone size with progression-based weighting
+            let sizes = ['large', 'medium'];
+            if (progressionPhase >= 1) {
+                // Add some small stones in later phases
+                sizes.push('medium', 'small');
+            }
+            if (progressionPhase >= 2) {
+                // Add even more variety in the final phase
+                sizes.push('small', 'small');
+            }
+            
             const randomSize = sizes[Math.floor(Math.random() * sizes.length)];
             
-            Composite.add(world, createStone({ size: randomSize }));
+            // Create spawn position with more variation
+            const canvasWidth = render.options.width;
+            const spawnX = Math.random() * (canvasWidth * 0.8) + (canvasWidth * 0.1);
+            const spawnY = hudHeight + 50 + (Math.random() * 100); // Random height within the game area
+            
+            // Create the stone with special properties if applicable
+            Composite.add(world, createStone({ 
+                size: randomSize,
+                specialType: specialType,
+                position: { x: spawnX, y: spawnY },
+                // Add a bit of initial rotation for more dynamic movement
+                angle: Math.random() * Math.PI * 2,
+                // Occasionally add some angular velocity for spinning stones
+                angularVelocity: (Math.random() > 0.7) ? (Math.random() - 0.5) * 0.05 : 0
+            }));
+            
+            // Special wave spawn pattern (every 5th spawn, create a wave of stones)
+            if (stoneSpawnCount % 5 === 0 && progressionPhase >= 1) {
+                // Spawn a row of 3-5 smaller stones in a pattern
+                const numExtraStones = 2 + Math.floor(Math.random() * 3);
+                const patternType = Math.floor(Math.random() * 3); // 0: horizontal, 1: arc, 2: v-shape
+                
+                setTimeout(() => {
+                    for (let i = 0; i < numExtraStones; i++) {
+                        let posX;
+                        if (patternType === 0) { // Horizontal line
+                            posX = canvasWidth * (0.3 + (i * 0.1));
+                        } else if (patternType === 1) { // Arc pattern
+                            const angle = (Math.PI / (numExtraStones + 1)) * (i + 1);
+                            posX = (canvasWidth / 2) + (Math.sin(angle) * (canvasWidth / 4));
+                        } else { // V-shape
+                            const offset = (i - (numExtraStones / 2)) * (canvasWidth / 20);
+                            posX = (canvasWidth / 2) + offset;
+                        }
+                        
+                        Composite.add(world, createStone({
+                            size: 'small',
+                            position: { x: posX, y: -30 - (i * 20) }
+                        }));
+                    }
+                }, 500); // Slight delay for the pattern
+            }
+            
+            stoneSpawnCount++;
         }
-    }, 3000);
+    }, spawnRate);
 }
+
+// Track how many stones we've spawned for pattern generation
+let stoneSpawnCount = 0;
 
 // Initialize game with stones scaled to screen size
 function initGame() {
@@ -1257,8 +1466,353 @@ function updateScore(points) {
     }
 }
 
+// Create a custom render event to draw the ocean with Ramayana theme
+Events.on(render, 'afterRender', function() {
+    const ctx = render.context;
+    const canvas = render.canvas;
+    const currentTime = Date.now();
+    
+    // Calculate ocean position (30% from bottom of screen)
+    oceanY = waterLevel;
+    
+    // Draw sacred water with rippling patterns
+    SanatanOrnaments.drawSacredWater(ctx, 0, oceanY, canvas.width, canvas.height - oceanY, currentTime);
+    
+    // Create wavy pattern with more pronounced waves (Ram Setu theme)
+    ctx.beginPath();
+    ctx.moveTo(0, oceanY);
+    
+    for (let x = 0; x < canvas.width; x += 10) {
+        const waveFactor = (Math.sin(x/300) + 1) * 0.5; // Creates varying wave sizes
+        const y = oceanY + Math.sin((x * waveFrequency) + waveOffset) * (waveAmplitude + waveFactor * 3);
+        ctx.lineTo(x, y);
+    }
+    
+    // Complete the wave shape
+    ctx.lineTo(canvas.width, oceanY);
+    ctx.lineTo(canvas.width, oceanY - 10);
+    ctx.lineTo(0, oceanY - 10);
+    ctx.closePath();
+    
+    // Fill the wave with a golden hue
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
+    ctx.fill();
+    
+    // Add Om symbols floating in water
+    for (let i = 0; i < 3; i++) {
+        const x = (canvas.width / 4) * (i + 1) + Math.sin(currentTime * 0.001 + i) * 30;
+        const y = oceanY + 50 + Math.cos(currentTime * 0.0008 + i) * 15;
+        SanatanOrnaments.omSymbol(ctx, x, y, 15, 'rgba(255, 255, 255, 0.15)');
+    }
+});
+
+
+
+// Function to manually spawn a wave of stones (triggered by button)
+function spawnStoneWave() {
+    if (!gameRunning) return;
+    
+    // Create a cooler animation effect for the manual spawn
+    const canvas = render.canvas;
+    const canvasWidth = canvas.width;
+    
+    // Play a special sound effect
+    if (window.audioManager) {
+        audioManager.play('stoneBreak');
+    }
+    
+    // Decide which pattern to use - for manual spawns, use more interesting patterns
+    const patternTypes = [
+        'arc',      // Arc of stones
+        'v',        // V-formation (like birds)
+        'circle',   // Circular formation
+        'rain',     // Rain of stones
+        'hanuman'   // Special Hanuman army pattern
+    ];
+    
+    const selectedPattern = patternTypes[Math.floor(Math.random() * patternTypes.length)];
+    let numStones = 0;
+    let specialStonesIncluded = false;
+    
+    // Different patterns have different numbers of stones and arrangements
+    switch(selectedPattern) {
+        case 'arc':
+            numStones = 5 + Math.floor(Math.random() * 3);
+            spawnArcPattern(numStones);
+            break;
+            
+        case 'v':
+            numStones = 5 + Math.floor(Math.random() * 4);
+            spawnVPattern(numStones);
+            break;
+            
+        case 'circle':
+            numStones = 6 + Math.floor(Math.random() * 3);
+            spawnCirclePattern(numStones);
+            break;
+            
+        case 'rain':
+            numStones = 8 + Math.floor(Math.random() * 5);
+            spawnRainPattern(numStones);
+            break;
+            
+        case 'hanuman': // Special themed pattern - Hanuman's army
+            spawnHanumanArmyPattern();
+            specialStonesIncluded = true;
+            break;
+    }
+    
+    // Cooldown the button to prevent spam (handled in UI.js)
+    window.startSpawnButtonCooldown && window.startSpawnButtonCooldown();
+}
+
+// Spawn patterns for the spawn button
+function spawnArcPattern(numStones) {
+    const canvas = render.canvas;
+    const canvasWidth = canvas.width;
+    
+    for (let i = 0; i < numStones; i++) {
+        // Calculate position along an arc
+        const angle = (Math.PI / (numStones + 1)) * (i + 1);
+        const x = (canvasWidth / 2) + (Math.sin(angle) * (canvasWidth / 3));
+        const y = hudHeight + 70 + (Math.cos(angle) * 50);
+        
+        // 30% chance of a special stone in manual spawns
+        const specialType = Math.random() < 0.3 ? 
+            Object.keys(specialStoneTypes)[Math.floor(Math.random() * Object.keys(specialStoneTypes).length)] : null;
+            
+        // Add with slight delay for visual effect
+        setTimeout(() => {
+            Composite.add(world, createStone({
+                size: Math.random() < 0.7 ? 'medium' : 'large',
+                position: { x, y },
+                velocity: { x: (Math.random() - 0.5) * 3, y: 2 + Math.random() * 3 },
+                specialType: specialType
+            }));
+        }, i * 100); // Stagger timing
+    }
+}
+
+function spawnVPattern(numStones) {
+    const canvas = render.canvas;
+    const canvasWidth = canvas.width;
+    const vWidth = canvasWidth * 0.4;
+    
+    for (let i = 0; i < numStones; i++) {
+        // Calculate position in V formation
+        const progress = i / (numStones - 1);
+        let x;
+        if (progress < 0.5) {
+            // Left side of V
+            x = (canvasWidth / 2) - vWidth * (0.5 - progress) * 2;
+        } else {
+            // Right side of V
+            x = (canvasWidth / 2) + vWidth * (progress - 0.5) * 2;
+        }
+        
+        // Y position gets lower as we move away from center
+        const distFromCenter = Math.abs(progress - 0.5) * 2;
+        const y = hudHeight + 70 + (distFromCenter * 50);
+        
+        const specialTypes = ['vanar', 'nal']; // More realistic for V-formation (like birds)
+        const specialType = Math.random() < 0.3 ? 
+            specialTypes[Math.floor(Math.random() * specialTypes.length)] : null;
+            
+        setTimeout(() => {
+            Composite.add(world, createStone({
+                size: 'medium',
+                position: { x, y },
+                velocity: { x: (Math.random() - 0.5), y: 3 + Math.random() * 2 },
+                specialType: specialType
+            }));
+        }, i * 80);
+    }
+}
+
+function spawnCirclePattern(numStones) {
+    const canvas = render.canvas;
+    const canvasWidth = canvas.width;
+    const radius = canvasWidth * 0.15;
+    
+    for (let i = 0; i < numStones; i++) {
+        // Calculate position in a circle
+        const angle = (Math.PI * 2 / numStones) * i;
+        const x = (canvasWidth / 2) + (Math.cos(angle) * radius);
+        const y = hudHeight + 100 + (Math.sin(angle) * radius);
+        
+        // 50% chance of a special stone in circle formation (represents unity)
+        const specialType = Math.random() < 0.5 ? 
+            Object.keys(specialStoneTypes)[Math.floor(Math.random() * Object.keys(specialStoneTypes).length)] : null;
+            
+        setTimeout(() => {
+            Composite.add(world, createStone({
+                size: Math.random() < 0.6 ? 'medium' : 'small',
+                position: { x, y },
+                velocity: { 
+                    x: (x - canvasWidth/2) * 0.01, // Slight outward velocity
+                    y: 2 + Math.random() 
+                },
+                specialType: specialType
+            }));
+        }, i * 50);
+    }
+}
+
+function spawnRainPattern(numStones) {
+    const canvas = render.canvas;
+    const canvasWidth = canvas.width;
+    
+    for (let i = 0; i < numStones; i++) {
+        // Random positions across the width of the screen
+        const x = Math.random() * (canvasWidth * 0.8) + (canvasWidth * 0.1);
+        const y = hudHeight + 70 + (Math.random() * 100); // Varied heights adjusted for HUD
+        
+        // Smaller chance of special stones in rain pattern (it's more chaotic)
+        const specialType = Math.random() < 0.2 ? 
+            Object.keys(specialStoneTypes)[Math.floor(Math.random() * Object.keys(specialStoneTypes).length)] : null;
+            
+        setTimeout(() => {
+            Composite.add(world, createStone({
+                size: Math.random() < 0.5 ? 'small' : 'medium',
+                position: { x, y },
+                velocity: { x: (Math.random() - 0.5) * 2, y: 3 + Math.random() * 4 },
+                specialType: specialType
+            }));
+        }, Math.random() * 800); // Random timing for rain effect
+    }
+}
+
+function spawnHanumanArmyPattern() {
+    const canvas = render.canvas;
+    const canvasWidth = canvas.width;
+    
+    // This is a special themed pattern representing Hanuman's army of monkeys
+    // Create a line of predominantly special stones (hanuman and vanar types)
+    
+    const numStones = 7; // Fixed for this special pattern
+    const specialTypes = ['hanuman', 'vanar']; // Themed stones for this pattern
+    
+    // First create a Hanuman stone at the front (center)
+    setTimeout(() => {
+        Composite.add(world, createStone({
+            size: 'large',
+            position: { x: canvasWidth / 2, y: hudHeight + 80 },
+            velocity: { x: 0, y: 4 },
+            specialType: 'hanuman'
+        }));
+    }, 0);
+    
+    // Then create the monkey army in a V behind him
+    for (let i = 0; i < numStones-1; i++) {
+        const side = i % 2; // 0 for left, 1 for right
+        const row = Math.floor(i / 2) + 1;
+        
+        const x = (canvasWidth / 2) + (side === 0 ? -1 : 1) * (row * 50);
+        const y = hudHeight + 80 + (row * 60);
+        
+        // Alternating special types for variety
+        const specialType = specialTypes[i % 2];
+        
+        setTimeout(() => {
+            Composite.add(world, createStone({
+                size: 'medium',
+                position: { x, y },
+                velocity: { x: (side === 0 ? -0.5 : 0.5), y: 3 + Math.random() * 2 },
+                specialType: specialType
+            }));
+        }, 150 + i * 100);
+    }
+    
+    // Add one Rama stone at the back (representing Lord Rama guiding)
+    setTimeout(() => {
+        Composite.add(world, createStone({
+            size: 'medium',
+            position: { x: canvasWidth / 2, y: hudHeight + 300 },
+            velocity: { x: 0, y: 2 },
+            specialType: 'rama'
+        }));
+    }, 1000);
+}
+
+// Add gentle floating animation for unbroken stones (Ram Setu theme)
+Events.on(engine, 'beforeUpdate', function() {
+    // Only apply float animations if game is running
+    if (!gameRunning) return;
+    
+    // Get all bodies and filter for unbroken stones
+    const bodies = Composite.allBodies(world);
+    bodies.forEach(body => {
+        if (!body.isStatic && !body.isBroken && !body.inWater && body.floatForce) {
+            // Create gentle floating motion like in Ramayana paintings
+            const time = Date.now() * 0.001; // Convert to seconds for gentler animation
+            const floatX = Math.sin(time + body.id * 0.3) * 0.0001;
+            const floatY = Math.cos(time + body.id * 0.7) * 0.0001;
+            
+            // Apply a very gentle buoyant force
+            Body.applyForce(body, body.position, {
+                x: floatX,
+                y: floatY - 0.0001 // Slight upward bias to counter any gravity effects
+            });
+            
+            // Add slight rotation for more interesting movement
+            if (Math.random() < 0.05) { // Only occasionally adjust rotation
+                Body.setAngularVelocity(body, body.angularVelocity + (Math.random() - 0.5) * 0.001);
+            }
+        }
+    });
+});
+
+// Add physics effects when stones break
+Events.on(engine, 'afterUpdate', function() {
+    // Apply gravity only to broken stones to simulate them falling
+    const allBodies = Composite.allBodies(world);
+    allBodies.forEach(body => {
+        if (!body.isStatic && body.isBroken && !body.isPartOfBridge) {
+            // Apply gravity to broken stones for Ram Setu bridge building theme
+            const gravity = 0.001 * body.mass;
+            Body.applyForce(body, body.position, {
+                x: 0,
+                y: gravity * 0.5 // Gentle gravity for broken stones
+            });
+        }
+    });
+});
+
+// Function to highlight the spawn button when stones are running low
+function updateSpawnButtonHighlight(currentStoneCount, maxStones) {
+    // Only proceed if the UI element exists
+    const spawnButton = document.getElementById('spawn-stones');
+    if (!spawnButton) return;
+    
+    // Calculate stone threshold - highlight when less than 30% of max stones remain
+    const lowStoneThreshold = Math.floor(maxStones * 0.3);
+    
+    // Check if the button is on cooldown - we don't want to highlight if it's unusable
+    const isCooldown = spawnButton.classList.contains('cooldown');
+    
+    if (currentStoneCount <= lowStoneThreshold && !isCooldown) {
+        // Add pulsing highlight effect
+        spawnButton.classList.add('low-stones');
+        
+        // Add subtle animation to draw attention
+        // If this is the first time we're adding the class, play the animation
+        if (!spawnButton.classList.contains('highlighted-animation')) {
+            spawnButton.classList.add('highlighted-animation');
+            
+            // Remove the animation class after animation completes to allow re-triggering
+            setTimeout(() => {
+                spawnButton.classList.remove('highlighted-animation');
+            }, 1000); // Animation duration
+        }
+    } else {
+        // Remove highlight when enough stones are present
+        spawnButton.classList.remove('low-stones');
+    }
+}
+
 // Expose functions to window for UI integration
 window.startGameEngine = startGameEngine;
 window.pauseGameEngine = pauseGameEngine;
 window.resumeGameEngine = resumeGameEngine;
 window.restartGameEngine = restartGameEngine;
+window.spawnStoneWave = spawnStoneWave; // Expose the new spawn function
